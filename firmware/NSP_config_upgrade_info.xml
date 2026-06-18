@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<nsp_upgrade_info_root>
+	<device>
+		<upgrade_static_id>10000</upgrade_static_id>
+		<upgrade_start_id>10000</upgrade_start_id>
+		<upgrade_end_id>10499</upgrade_end_id>
+	</device>
+</nsp_upgrade_info_root>	
+		

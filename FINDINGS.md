@@ -119,7 +119,43 @@ discrepancies on:
 
 ---
 
-## 5. Open RE threads
+## 5. Ghidra static analysis
+
+Setup (host): JDK 21 + Ghidra 12.1.2 (`~/ghidra/ghidra_12.1.2_PUBLIC/`). Headless:
+`support/analyzeHeadless`. The app was imported + auto-analysed into project
+`~/ghidra-projects/SDS1102` (language `ARM:LE:32:v8:default`; **5432 functions**).
+> Ghidra 12 dropped Jython — Python scripts need PyGhidra (`pip install pyghidra`);
+> Java GhidraScripts work headless with no extra setup (see `ghidra-scripts/`).
+
+**Spec↔binary mapping confirmed** (`ghidra-scripts/ValidateSpecAddrs.java`): every
+spec-cited `FUN_xxxxxx` resolves to a function at exactly that address (entry ==
+`0x8000 + offset`):
+
+| spec `FUN_` | role (spec) | resolved |
+|---|---|---|
+| `000cc224` | GPMC read primitive (04 AppxA) | ✓ entry `0xcc224`, 152 B |
+| `000cc184` | PLANE-A byte writer `strb#1` (04 AppxA) | ✓ `0xcc184`, 152 B |
+| `001ae850` | coupling writer (04 §13.6) | ✓ `0x1ae850`, 60 B |
+| `001b05c8` | divisor class mapper (04 §5.4) | ✓ `0x1b05c8`, 232 B |
+| `001ae530` | `0x44` enable strobe (04 §5) | ✓ `0x1ae530`, 44 B |
+| `0021371c` | `0x35` run/mode writer (04 §5) | ✓ `0x21371c` |
+| `001b2998` | front-end relay assembler (06 §8) | ✓ `0x1b2998`, 2436 B |
+| `00074fd4` | `calibration.dat` reader 0xac0 (07 §2.1) | ✓ `0x74fd4`, 408 B |
+
+**Decompile of `FUN_001ae850` confirms spec 04 §13.6 verbatim** (coupling = one
+`&3`-masked write to the `0x22` selector, NO `0x23` strobe):
+
+```c
+void FUN_001ae850(byte param_1) {
+  FUN_001b3500(DAT_001ae88c, param_1 & 3);  // DAT_001ae88c = the 0x22 sel; FUN_001b3500 = PLANE-A byte writer
+  return;
+}
+```
+
+This makes the binary a live oracle for confirming/correcting the specs: any
+`FUN_` can be decompiled headless and checked against the spec text.
+
+## 6. Open RE threads
 
 - Resolve the `sds1000a_al.bin` ZIP-member transform (extra `0x2800`/`0x1400` block).
 - Capture + analyse the runtime `/dev/Gpmc` reglog (god-mode trace) → compare the

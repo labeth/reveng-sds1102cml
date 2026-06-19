@@ -1,0 +1,79 @@
+# Triggered/capture-class register window — vendor driven by TDIV 5E-9 (fast class) + TRMD NORM
+# Captured 2026-06-19T01:04:54Z via tmp/run/run-vendor-capture.sh against simd -trigger.
+# Shows: fast divisor class 0x19=0x20, MEASUREMENT sub-mode 0x21=0x05/0x45, 0x38 status cycling
+#        008a(done)->008f(busy)->00af(TRIGGERED, bit5), and 0x3a/0x3b trigger-position reads.
+# NOTE: the vendor stays in case-5 MEASUREMENT branch (FUN_0020ade4) — NO 0xC0/0xC3/0xC8 re-arm,
+#       NO 0x30-0x34 deep drain — see specs/04 §5.0c for why the deep branch (FUN_0020af00) is gated.
+#----------------------------------------------------------------------
+R cs1 000e = ffff  idle
+W cs1 000e = 0000  config write
+W cs1 0019 = 0020  divisor class
+W cs1 001a = 0000  divisor word
+W cs1 001b = 0000  divisor word
+W cs1 0035 = 0000  run/mode
+W cs1 0036 = 0000  divisor word
+W cs1 001b = 0000  divisor word
+R cs1 000e = ffff  idle
+W cs1 000e = 0000  config write
+R cs1 000e = ffff  idle
+W cs1 000e = 0000  config write
+W cs1 0019 = 0020  divisor class
+W cs1 001a = 0000  divisor word
+W cs1 001b = 0000  divisor word
+W cs1 007f = 0000  config write
+W cs1 0001 = 0000  config write
+W cs1 0002 = 0000  config write
+W cs1 0004 = 0000  config write
+W cs1 0008 = 0000  config write
+W cs1 007a = 0000  config write
+W cs1 007b = 0000  config write
+W cs1 007c = 0000  config write
+W cs1 007d = 0000  config write
+W cs1 007e = 0000  config write
+W cs1 0075 = 0000  config write
+W cs1 0076 = 0000  config write
+W cs1 0077 = 0000  config write
+W cs1 0078 = 0000  config write
+W cs1 0079 = 0000  config write
+W cs1 0070 = 0000  config write
+W cs1 0071 = 0000  config write
+W cs1 0072 = 0000  config write
+W cs1 0073 = 0000  config write
+W cs1 0074 = 0000  config write
+W cs1 006b = 0000  config write
+W cs1 006c = 0000  config write
+W cs1 006d = 0000  config write
+W cs3 000b = 0000  event-mask window open (strobe=0)
+W cs3 000a = 00b0  event-mask high byte staged
+W cs3 0009 = 0010  event-mask low byte staged
+W cs3 000b = 0001  event-mask flush (strobe=1) -> latched
+W cs3 000b = 0000  event-mask window open (strobe=0)
+
+#---- the TRIGGERED window (0x38 bit5 set) + measurement position reads ----
+W cs1 0016 = 0001  cal/level latch strobe
+W cs1 0021 = 0000  arm opcode
+W cs1 0021 = 0005  arm opcode
+R cs1 0038 = 008f  status
+R cs1 0038 = 00af  status
+R cs1 003b = 0001  trig-pos hi
+R cs1 003a = 0000  trig-pos lo
+W cs1 0021 = 0000  arm opcode
+W cs1 0021 = 0000  arm opcode
+W cs1 0021 = 0005  arm opcode
+R cs1 0038 = 00af  status
+R cs1 003b = 0001  trig-pos hi
+R cs1 003a = 0000  trig-pos lo
+W cs1 0021 = 0000  arm opcode
+W cs1 003e = 0000  config write
+W cs1 0058 = 0000  config write
+W cs1 003c = 00f2  config write
+W cs1 003d = 0007  config write
+W cs1 0016 = 0001  cal/level latch strobe
+W cs1 0021 = 0000  arm opcode
+W cs1 0021 = 0005  arm opcode
+R cs1 0038 = 00af  status
+R cs1 003b = 0001  trig-pos hi
+R cs1 003a = 0000  trig-pos lo
+W cs1 0021 = 0000  arm opcode
+W cs1 0021 = 0000  arm opcode
+W cs1 0021 = 0005  arm opcode

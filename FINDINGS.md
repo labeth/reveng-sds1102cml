@@ -252,3 +252,29 @@ not in the firmware (spec 02 §8), so closing the last mile needs either the phy
 unit's key labels (then the exact keys) or a bounded menu-sequence search with the
 injection tool now in place. Everything else — register/SCPI/config/display/GUI
 navigation — is validated faithful against the sim.
+
+### ✅ FULL PIPELINE PROVEN: the vendor draws + measures our simulated signal (2026-06-19)
+
+The trace-draw block is SOLVED. The lever is **AUTO trigger mode + a deep-class
+timebase**: drive the running vendor with SCPI `TRMD AUTO` (the dispatcher's free-run
+acquire branch, no trigger wait) at a deep/scan timebase (>=100 ms/div, e.g. 500 ms),
+after an edge-trigger setup (`TRSE EDGE,SR,C1,...`). Then the dispatcher takes BRANCH B,
+the deep FSM `FUN_0020af00` drains `0x30-0x34`, and the vendor DRAWS THE TRACE.
+
+Verified live: the unmodified vendor app rendered a **clean sine wave on its LCD** — both
+channels (yellow CH1, magenta CH2) with the per-channel phase skew our siggen produces,
+~3 cycles, "Scan"/Auto (screenshots/vendor-draws-sim-sine-clean.png). It also now answers
+the previously-blocked numeric paths: `C1:PAVA? PKPK = 3.92V`, `MEAN = -2.08V` (FREQ ****,
+random-phase frame). The full register footprint of the AUTO/deep path is HW-faithful:
+0x38 cycles 008f/00af/008a, 0x46 advances (0x200/0x300), 0x3a/0x3b give a stable
+position, and the vendor's trigger-level sweep (CS3 0x16 ramp 0x00-0xfe) + CS3 0x36 are
+accepted. **The vendor cannot tell the sim is fake — it drew and measured our synthetic
+signal as a real waveform.** Earlier failures were sending `TRMD AUTO` after `AUTO_SETUP`
+wedged the dispatcher, or at a free-run-class timebase (no drain code).
+
+Open faithfulness note (NOT a "detectable fake" issue): the vendor's PAVA PKPK/MEAN in
+SCAN mode appear ~2x / DC-offset vs a centered-128/Vdiv50 expectation — consistent with
+the documented spec 04 §6.1.1 roll(Vdiv/25, center ~139) vs deep(Vdiv/50, center 128)
+scale boundary at slow timebase; the visual trace is a clean centered sine. Harness:
+tmp/run/ops.sh (broad SCPI operation sweep), trace.sh (clean-trace + measurement
+validation), map-keys.sh / sweep.sh (key injection).

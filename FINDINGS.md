@@ -217,3 +217,38 @@ one-key captures from a physical unit). So navigating the GUI to activate the wa
 object requires either the unit's key map or a brute-force key-injection sweep
 (inject each of the 64 matrix positions + raise SIGIO, observe which activates
 acquisition). Harness: `tmp/run/run-vendor.sh` (signal via `SIGNAL=...`), `tmp/run/exp.sh`.
+
+### Front-panel key injection + the exact trace-draw gate chain (2026-06-19)
+
+Built front-panel key injection into the harness (open repo: `fpga.SetMatrixWord`,
+`simd OP_SETKEY/OP_MARK`, `devshim` key-sweeper) — synthesising the SIGIO key IRQ the
+vendor uses (`signal(0x1d=SIGIO)`, decompile L843) so the GUI can be driven headlessly.
+**It works**: the vendor reads the exact injected key (`R cs1 0065 = 0xfbff` for
+bit 10), and the GUI is fully navigable — a 64-position sweep opened the UTILITY and
+MATH menus, toggled CH2 on, adjusted the trigger level, and the **RUN/STOP key is
+`0x65:02`** (status box Armed→Stop, green→red). Tools: `tmp/run/sweep.sh`
+(`KEY=0x65:2` single tap, default = full sweep + per-key framebuffer scoring).
+
+**Why no single key (or run/stop) draws the trace — the full gate chain from the
+dispatcher `FUN_000d3148` (decompile L1356):**
+```
+if (FUN_002135f4()==1) {                      // satisfied
+  ...enable/0x35/mode...
+  if (*(DAT_000d3254+0x20)==0)  FUN_001b035c();   // BRANCH A: position-only (our state)
+  else {                                          // BRANCH B: acquire
+    FUN_002131f4(); FUN_001b0398();
+    if (*DAT_000d3264==1 && *DAT_000d3268==0 && *(DAT_000d326c+0x40)!=4)
+        FUN_0021eb08();                           // <- roll read 0x41/0x59 + DRAW
+  }
+}
+```
+Gate 1 = `*(DAT_000d3254+0x20)` (the RUN flag — STOP sets BRANCH A, per the capture-
+script RE). Gate 2 = the three acquisition/trigger-mode flags (`DAT_000d3264/3268/
+326c`). The headless boot lands in BRANCH A (run flag 0), and even toggling RUN/STOP
+did not reach BRANCH B with all three Gate-2 flags satisfied — those require the
+**AUTO trigger mode** (the dispatcher's free-run/no-trigger-wait acquire branch),
+set via a trigger-menu → AUTO-softkey **key sequence**. The `(row,col)→button` map is
+not in the firmware (spec 02 §8), so closing the last mile needs either the physical
+unit's key labels (then the exact keys) or a bounded menu-sequence search with the
+injection tool now in place. Everything else — register/SCPI/config/display/GUI
+navigation — is validated faithful against the sim.

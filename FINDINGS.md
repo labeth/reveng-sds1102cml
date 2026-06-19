@@ -165,3 +165,55 @@ This makes the binary a live oracle for confirming/correcting the specs: any
   struct copy, the single-open guard, CSVALID teardown) to confirm `specs/02/04 §2`.
 - Per-unit `calibration.dat` is not in the update — pull from the unit to validate
   `sim/storage`'s checksum+scramble against real data.
+
+---
+
+## Vendor-app E2E validation against the sim (2026-06-19)
+
+Ran the unmodified `SDS1000_arm.app` under qemu-arm + `devshim.so` + `simd` (wrapping
+`sim/fpga`), fed it simulated signals via the new `simd -signal`, and exercised it
+through display capture + VXI-11/SCPI across modes. **Result: the sim is register-
+faithful; the vendor validates E2E for every reachable path. The one path that does
+NOT produce output — the waveform trace / `WF? DAT2` / measurements — is blocked by
+vendor-internal GUI state, not by the sim.**
+
+**What validated (works against the sim):**
+- Boot + full GUI render (graticule, UTILITY menu, "Armed", CH1 100mV/M500µs, trigger
+  marker, freq counter). The single-page `/dev/fb0` fix is confirmed live:
+  `g_vinfo.yres=480`, `mmap /dev/fb0 (768000 bytes)` (not the old 2-page 1,536,000).
+- Main loop stable indefinitely (exit 124 = timeout-killed).
+- VXI-11/SCPI dispatcher returns CORRECT values matching the display + specs:
+  `*IDN? → Siglent,SDS115X,...,6.01.01.25`; `TDIV? → 5.00E-04s`; `C1:VDIV? → 1.00E-01V`;
+  `SARA? → 1.250MSa` (exactly spec 04 §8.3 for 500µs/div); `SANU? → 20000`. `TDIV` set
+  commands take effect (changed to 1.00E-01s).
+- Both acquisition register loop-classes driven exactly per the decompile: the §5.0a
+  GUI free-run loop (`0x3c/0x3d/0x3e/0x58` + `0x16` + `0x39`-poll ~4000×) and, with
+  `simd -trigger`, the cycling done bit (`0x39`: done → not-done×7 → done) + the
+  capture-class arm (`0x21=0xC0/0xC3`). At fast TDIV the §5.0c MEASUREMENT branch
+  (`0x21=0x05`, `0x38` cycling `008f→00af`, `0x3a/0x3b` position) — all faithful.
+
+**What is blocked (and WHY — decisive, decompile-backed):** every path that needs
+actual SAMPLE DATA blocks — the trace never draws, and `C1:WF? DAT2`, `C1:WF? DESC`,
+`C1:PAVA?`, and `AUTO_SETUP` all time out. The vendor reads **zero** sample data
+(`0x41/0x59` roll, `0x30-0x34` deep, `0x38` status are NEVER read) regardless of
+trigger mode (`TRMD AUTO`), timebase (tested 500µs free-run AND 100ms roll), or
+`-trigger`. The vendor's sample-read + draw lives in `FUN_0020af00`/`FUN_0021eb08`,
+reached only when the per-tick dispatcher `FUN_000d3148` takes its acquisition branch
+— gated by **app-internal state** (the timebase loop-class `FUN_00219abc`, the
+display-object pointer compare `*0x434af4 == 0x433390` choosing deep-drain vs the
+MEASUREMENT branch, and the dispatcher flags `*DAT_000d3254+0x20`, `*DAT_000d3264`).
+**None of these is an FPGA register response** — the RE pass confirmed no `0x39`/`0x38`
+value or SCPI command flips them; they are set by **front-panel acquisition-mode /
+menu navigation**. The vendor boots headless into the UTILITY/Counter view where the
+waveform-acquisition object is not the active display object, so the sample subsystem
+never runs. A held `0x39=1` is the worst case (forces `FUN_00218098 → 0xffffffff →
+no-draw`); `simd -trigger` correctly presents the bit5-leads-bit0 edge the capture FSM
+needs, but the display-object gate is upstream and never reached.
+
+**The blocker is the front-panel key map.** The vendor reads keys only on a SIGIO IRQ
+(`/dev/fpga_key`), never polling the matrix (`0x64-0x67` never read in the trace), and
+the `(row,col) → labelled-button` map is **not in the firmware** (spec 02 §8 — needs
+one-key captures from a physical unit). So navigating the GUI to activate the waveform
+object requires either the unit's key map or a brute-force key-injection sweep
+(inject each of the 64 matrix positions + raise SIGIO, observe which activates
+acquisition). Harness: `tmp/run/run-vendor.sh` (signal via `SIGNAL=...`), `tmp/run/exp.sh`.
